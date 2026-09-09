@@ -1,0 +1,46 @@
+project:
+  name: airline-delay-project
+  start_year: 2025
+  end_year: 2025
+  expected_months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+paths:
+  raw_bts: data/raw/bts/2025
+  raw_airports: data/raw/airports/airports.csv
+  reports: reports
+  tables: reports/tables
+  figures: reports/figures
+  processed: data/processed
+  database: database/airline_dw.sqlite
+
+processing:
+  chunksize: 100000
+
+target:
+  severe_delay_minutes: 60
+  exclude_cancelled: true
+  exclude_diverted: true
+
+ranking_thresholds:
+  airline_min_flights: 10000
+  airport_min_flights: 5000
+  route_min_flights: 1000
+
+features:
+  airport_iata_aliases:
+    # The supplied current OurAirports file stores West Palm Beach as DJT and
+    # retains historical BTS code PBI in its keywords.
+    PBI: DJT
+  departure_time_bands:
+    - {name: Late Night, start_hour: 0, end_hour: 5}
+    - {name: Morning, start_hour: 6, end_hour: 10}
+    - {name: Midday, start_hour: 11, end_hour: 15}
+    - {name: Evening, start_hour: 16, end_hour: 20}
+    - {name: Night, start_hour: 21, end_hour: 23}
+  include_historical_features: false
+
+model:
+  train_end_date: 2025-08-31
+  validation_end_date: 2025-10-31
+  test_end_date: 2025-12-31
+  random_state: 42

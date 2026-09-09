@@ -1,0 +1,20 @@
+.DS_Store
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Large/generated data artifacts
+data/raw/
+data/interim/
+data/processed/
+database/*.sqlite
+database/*.db
+models/trained/
+
+# Generated analysis outputs are reproducible from scripts.
+reports/figures/*.png
+reports/tables/*.csv
+
