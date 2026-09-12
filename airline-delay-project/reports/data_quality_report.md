@@ -55,13 +55,14 @@ Missing operational fields on cancelled or diverted flights are not automaticall
 | Invalid Cancelled Flag | 0 |
 | Invalid Diverted Flag | 0 |
 | Invalid Scheduled Departure Time | 0 |
+| Invalid Scheduled Arrival Time | 0 |
 | Nonpositive Scheduled Elapsed Time | 5 |
 | Negative Actual Elapsed Time | 0 |
 | Negative Air Time | 0 |
 | Completed Missing Arrival Delay | 1 |
 | Cancelled With Arrival Delay | 0 |
 
-No records were removed during this initial phase. Candidate issues remain traceable for the next cleaning decision.
+Final cleaning retained every operational record. The five invalid durations and one unknown completed arrival outcome were reviewed; see cleaning_log.md for decisions.
 
 ## Airport source and join coverage
 
@@ -87,3 +88,13 @@ No records were removed during this initial phase. Candidate issues remain trace
 - Cancelled and diverted flights retain their operational records but receive a null severe-delay target.
 - Outlying delay values are retained because large disruption events can be legitimate.
 - The one-year scope supports within-2025 analysis but not year-over-year trend claims.
+
+## Final persistence and validation
+
+- 7,001,619 cleaned and enriched operational rows read back from monthly Parquet.
+- 6,879,484 eligible ML rows persisted with the explicit feature allowlist.
+- All saved ML values/types checked against the pre-save DataFrames.
+- Calendar fields agree with flight dates; both endpoint joins preserve rows.
+- Conversion/category audit: 0 parse failures and 0 actual field corrections.
+- Full reconciliation: `tables/final_row_reconciliation.csv`.
+- Remaining missing predictors: `tables/ml_feature_missingness.csv`; imputation belongs to training only.

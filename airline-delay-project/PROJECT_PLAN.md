@@ -4,12 +4,71 @@
 > **Purpose of this file:** This is the single source of truth for implementing the project in Codex CLI.  
 > Codex should use this document to scaffold the repository, ingest the data, perform wrangling, build the SQL/warehouse layer, train and evaluate ML models, and prepare Power BI-ready outputs.
 >
-> **Project status:** In progress — 2025 source audit, first cleaning pass, feature derivation, and first-pass EDA complete  
+> **Project status:** Cleaning, EDA, and transformation complete; warehouse and model training are next
 > **Primary domain:** Airline operations, flight delays, cancellations, airports  
 > **Primary dataset:** U.S. Bureau of Transportation Statistics (BTS) Reporting Carrier On-Time Performance  
 > **Data period:** January–December 2025 (one full calendar year)  
 > **Supporting dataset:** OurAirports `airports.csv`  
 > **Optional extension:** Weather data — **do not add in the initial implementation**
+
+## Active implementation plan — 13 September 2026
+
+This checkpoint completes cleaning, EDA, and transformation. It supersedes the
+older first-pass status and suggested notebook filenames below; warehouse,
+model training, and Power BI remain subsequent milestones.
+
+1. Finish `notebooks/01_beginner_eda.ipynb`: explain raw schema, measured
+   missingness, duplicates, conversions, category normalization, before/after
+   cleaning, the six flagged records, extreme-delay context, and full-year EDA.
+   Preserve its existing findings and add distributions, airport comparisons,
+   and an airport-by-month cancellation heatmap with explicit denominators.
+2. Keep reusable logic in small pandas/NumPy functions. Retain operational
+   missingness and all source rows; flag invalid scheduled durations and the
+   completed flight with unknown arrival delay. Do not impute outcomes or
+   delete unusual but possible delays. Measure conversion failures and actual
+   category corrections instead of assuming that every row required repair.
+3. Add `scripts/run_etl.py` to refresh the source audit and persist one cleaned
+   and one enriched Parquet file per month. Validate schema, monthly dates,
+   calendar fields, duplicate candidates, row counts, targets, and both airport
+   joins. Retain source filename and original one-based data-row number.
+4. Create `notebooks/02_feature_engineering.ipynb` with visible examples of
+   route, calendar, scheduled-time, distance-band, and cyclic-time features;
+   two many-to-one airport merges; a group-by and pivot; and full-data exports.
+   Explain why each feature supports the operational or prediction question.
+5. Persist eligible ML rows using an explicit pre-departure feature allowlist,
+   plus the target, provenance, and chronological split labels. Freeze Jan–Aug
+   training, Sep–Oct validation, Nov–Dec testing. Leave imputation, scaling,
+   encoding, balancing, and model fitting to the ML stage; they must be fitted
+   on training data only. Do not use full-year delay summaries as predictors.
+   Current OurAirports labels are descriptive snapshot metadata; only physical
+   coordinates are candidate predictors, with the historical-snapshot limitation
+   documented. Preserve the existing source-supported PBI alias.
+6. Generate a concise final cleaning log, transformation/data dictionary,
+   reconciliation and split tables, and measured completion report. Test target
+   boundaries, invalid times, missing values, join cardinality, and split
+   boundaries. Execute both notebooks from fresh kernels and inspect charts.
+
+**Execution status — completed and verified:** The full ETL retained all
+7,001,619 operational rows and exported 6,879,484 eligible ML rows. Each of the
+three flight layers contains twelve monthly Parquet files; both endpoint joins
+resolve every row. Five impossible durations and one unknown completed outcome
+were handled with the documented flags/exclusions. Twenty extreme records were
+reviewed; all satisfied the delay/duration identity and were retained. Actual
+numeric/date parse failures and category corrections were both zero.
+
+`01_beginner_eda.ipynb` executed all 22 code cells, and
+`02_feature_engineering.ipynb` executed all 11 code cells in fresh kernels.
+All 12 tests passed, including Parquet type/value round trips. Saved charts were
+visually checked. Validation used pandas 2.3.3 and PyArrow 20.0.0 in the local
+project environment. Run `python scripts/run_etl.py`, then
+`python scripts/execute_notebooks.py` to reproduce the stage.
+
+The frozen split has 4,592,366 training, 1,159,898 validation, and 1,127,220 test
+rows. One missing scheduled duration remains among eligible predictors, in
+November; any later imputer must be fitted on training rows only. The target
+threshold and feature allowlist are fixed for the next stage. No models or
+learned preprocessing were fitted. See `reports/cleaning_log.md`,
+`reports/feature_dictionary.md`, and `reports/transformation_report.md`.
 
 ---
 
@@ -287,7 +346,7 @@ Weather can be added later only as a documented extension if:
 - the team has enough time,
 - the additional source clearly improves the model or analysis.
 
-## Current Implementation Checkpoint — 9 September 2026
+## Historical Implementation Checkpoint — 9 September 2026
 
 Completed against the full 2025 dataset:
 
@@ -1706,14 +1765,14 @@ The project should eventually produce:
 - [x] Load all source files
 - [x] Produce source manifest
 - [x] Validate schema
-- [ ] Create standardized interim Parquet
+- [x] Create standardized interim Parquet (12 monthly files)
 
 ## Milestone 3 — Cleaning
 
 - [x] Missing-value audit
 - [x] Duplicate audit
 - [x] Type conversion
-- [ ] Outlier investigation (range/validity audit complete; contextual review pending)
+- [x] Outlier investigation (all six flags and 20 delay extremes reviewed)
 - [x] Cleaning log
 
 ## Milestone 4 — Transformation
@@ -1725,7 +1784,10 @@ The project should eventually produce:
 - [x] season
 - [x] delay category
 - [x] severe-delay target
-- [ ] airport enrichment (dimension and join coverage complete; persisted flight join pending)
+- [x] airport enrichment (both endpoint joins persisted with row reconciliation)
+- [x] distance band and cyclic scheduled-time features
+- [x] route-month aggregation and route/airport-month pivots
+- [x] explicit feature allowlist and persisted eligible ML partitions
 
 ## Milestone 5 — Warehouse
 
@@ -1747,9 +1809,9 @@ The project should eventually produce:
 
 ## Milestone 7 — ML
 
-- [ ] finalize target
-- [ ] leakage-safe features
-- [ ] chronological split
+- [x] finalize target (ARR_DELAY > 60 on eligible completed flights)
+- [x] leakage-safe candidate feature allowlist (no fitted preprocessing yet)
+- [x] chronological split (Jan–Aug / Sep–Oct / Nov–Dec)
 - [ ] baseline
 - [ ] Logistic Regression
 - [ ] Decision Tree

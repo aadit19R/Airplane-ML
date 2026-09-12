@@ -1,6 +1,6 @@
 # Airline Delay Project
 
-This project uses all 12 monthly 2025 BTS Reporting Carrier On-Time Performance files and the supplied OurAirports metadata. The current implementation covers repository setup, full-source auditing, a first cleaning/transformation pass, airport-code validation, and first-pass EDA. Machine learning has intentionally not started yet.
+This project uses all 12 monthly 2025 BTS Reporting Carrier On-Time Performance files and the supplied OurAirports metadata. Data cleaning, descriptive EDA, airport enrichment, and feature engineering are complete. The code uses pandas, NumPy, Matplotlib, and Seaborn, with PyArrow for Parquet storage. Model training, the SQL warehouse, and Power BI are later stages.
 
 ## Current status
 
@@ -8,11 +8,13 @@ This project uses all 12 monthly 2025 BTS Reporting Carrier On-Time Performance 
 - 7,001,619 flight rows audited
 - 28 source columns with a consistent schema
 - no exact or business-key duplicates detected
-- cleaning and feature logic implemented with chunked processing
+- 7,001,619 cleaned and airport-enriched operational rows saved in monthly Parquet files
+- 6,879,484 eligible ML rows saved with a pre-departure feature allowlist and chronological split
+- five invalid durations flagged/nulled; one unknown completed outcome excluded from the target
 - 100% of 352 BTS origin and destination codes resolved against the airport dimension using a documented historical `PBI -> DJT` alias
-- first-pass EDA tables and four figures generated
+- expanded, executed cleaning/EDA and feature-engineering notebooks with tables and charts
 
-See `reports/data_quality_report.md`, `reports/cleaning_log.md`, `reports/eda_progress_report.md`, and `reports/literature_review_and_research_gaps.md` for the measured results, research basis, and decisions.
+See `reports/cleaning_log.md`, `reports/transformation_report.md`, and `reports/feature_dictionary.md` for decisions, measured results, and feature definitions. The research basis remains in `reports/literature_review_and_research_gaps.md`.
 
 ## Repository structure
 
@@ -49,33 +51,44 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-The initial-analysis script runs with pandas, NumPy, matplotlib, and PyYAML. The beginner EDA notebook uses pandas, NumPy, Matplotlib, and Seaborn. PyArrow is listed because a later stage will persist partitioned Parquet files.
+Use the project virtual environment for both scripts and Jupyter so library versions match `requirements.txt`. PyYAML reads existing configuration; PyArrow supports pandas Parquet I/O. The source audit reads 100,000-row chunks; final ETL processes one month at a time. Several GB of available memory are recommended for the monthly pass and notebook walkthrough.
 
-## Run the initial cleaning and EDA pass
+## Reproduce cleaning and transformation from raw files
 
 ```bash
-python scripts/run_initial_analysis.py
+python scripts/run_etl.py
+python scripts/execute_notebooks.py
 ```
 
-The script processes the files in 100,000-row chunks and regenerates:
+The ETL script runs the source audit, final cleaning, airport joins, feature engineering, and validation. It regenerates:
 
 - `reports/source_manifest.csv`
 - `reports/data_quality_report.md`
 - `reports/cleaning_log.md`
 - `reports/eda_progress_report.md`
 - detailed CSV tables in `reports/tables/`
-- four PNG figures in `reports/figures/`
+- baseline PNG figures in `reports/figures/`; notebook execution adds the remaining charts
 - `data/interim/airports_standardized/airports_standardized.csv`
+- `data/interim/flights_standardized/2025_MM.parquet` (all cleaned operational rows)
+- `data/processed/flights_wrangled/2025_MM.parquet` (enriched operational rows)
+- `data/processed/flights_ml/2025_MM.parquet` (eligible rows with features, target, and split)
+- final reconciliation, conversion audit, missingness-by-status, distribution, and split tables
+- `reports/transformation_report.md` and `reports/tables/data_dictionary.csv`
 
-## Open the beginner-friendly EDA notebook
+Each flight layer contains 12 monthly files. Large data and generated PNG/CSV outputs are ignored by Git; both executed notebooks and Markdown reports can be committed. Rerunning ETL refreshes generated outputs and never edits raw sources. The older `scripts/run_initial_analysis.py` remains an audit-only entrypoint; use the full ETL command for current final reports.
 
-After the initial-analysis script has created the summary tables, start Jupyter:
+## Open the beginner-friendly notebooks
+
+After ETL, start Jupyter from the activated virtual environment:
 
 ```bash
-jupyter lab
+python -m jupyterlab
 ```
 
-Then open `notebooks/01_beginner_eda.ipynb` and choose **Run All Cells**. The notebook uses short pandas, NumPy, Matplotlib, and Seaborn cells to reproduce the four EDA figures and the same five headline findings. It reads the prepared summary tables instead of loading all 884 MB of raw CSV data, which keeps it fast and suitable for a classroom explanation.
+1. `notebooks/01_beginner_eda.ipynb`: raw audit, visible cleaning operations, missing-value justifications, six flagged records, extreme review, full-year EDA, and reconciliation.
+2. `notebooks/02_feature_engineering.ipynb`: route/calendar/time/distance features, two airport merges, group-by/pivots, target governance, feature allowlist, and saved-data verification.
+
+Choose **Run All Cells** in order within each notebook. Notebook 01 uses a 10,000-row teaching preview and full-year report tables; its distribution charts use a clearly labeled monthly sample. Notebook 02 walks through a full January partition and checks all 12 monthly outputs. `scripts/execute_notebooks.py` runs both from fresh kernels and saves outputs; a single notebook filename may also be supplied as an argument.
 
 ## Run tests
 
@@ -85,7 +98,7 @@ After installing the requirements:
 python -m pytest -q
 ```
 
-The current tests cover scheduled-time parsing, target eligibility, and invalid scheduled-duration handling.
+Tests cover target boundaries and exclusions, invalid/missing times, category normalization, bad numeric input, calendar validation, distance/cyclic features, join cardinality/coverage, chronological boundaries, leakage exclusions, and Parquet round-trip types/values.
 
 ## Cleaning rules already implemented
 
@@ -95,21 +108,18 @@ The current tests cover scheduled-time parsing, target eligibility, and invalid 
 - keep legitimate missing operational values for cancelled/diverted flights
 - flag and null impossible nonpositive scheduled durations in derived data
 - detect exact and business-key duplicates without deleting candidates blindly
-- derive route, scheduled departure hour, time band, weekend, season, delay category, and severe-delay target
+- derive route, scheduled hours, cyclic departure-time coordinates, distance band, time band, weekend, season, delay category, and severe-delay target
 - set the severe-delay target only for noncancelled, nondiverted flights with a known arrival delay
 - preserve extreme delays for contextual investigation instead of deleting statistical outliers
 
 ## Next implementation sequence
 
-1. Review the six flagged records and extreme-delay cases in context; finalize the retained-column schema.
-2. Persist monthly cleaned flight partitions as Parquet, including provenance and quality flags.
-3. Join origin/destination airport keys and validate all foreign keys.
-4. Create the first three explanatory notebooks from the reproducible report tables.
-5. Build the SQLite star schema and row-reconciliation checks.
-6. Freeze the chronological 2025 train/validation/test split, then begin the baseline and ML models.
+1. Build the SQLite star schema with airport/date/airline keys and row-reconciliation checks.
+2. Create the ML notebook using `MODEL_FEATURES` from `src/features.py`; fit imputation/encoding/scaling on training rows only.
+3. Train the baseline and planned classifiers, evaluate severe-delay detection, then prepare Power BI outputs.
 
-The proposed ML split is January-August for training, September-October for validation, and November-December for testing. This is a within-year future holdout; conclusions must not claim year-over-year generalization.
+The saved ML split is January-August for training, September-October for validation, and November-December for testing. Candidate predictors still contain legitimate missing values; this stage does not fit an imputer or encoder. Full-year EDA includes holdout outcomes; keep later model tuning separate from test evaluation. This is a within-year future holdout, not evidence of year-over-year generalization.
 
 ## Course requirement alignment
 
-The supplied project guidelines require a real messy dataset, a justified cleaning log, at least one non-trivial transformation/join, persistent storage, three evidence-backed insights, an ML comparison, and a three-page Power BI dashboard. The 2025 BTS data comfortably satisfies the size and complexity requirements. Persistent storage, ML, and Power BI remain later milestones.
+The completed stage includes justified missing-value/type/category/duplicate decisions, a short cleaning log, two source joins, group-by/pivot transformations, derived features, persistent Parquet data, and evidence-backed EDA findings. The SQLite warehouse, ML comparison, and Power BI dashboard remain later milestones.

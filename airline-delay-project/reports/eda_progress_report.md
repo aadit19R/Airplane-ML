@@ -1,6 +1,6 @@
-# Initial EDA Progress Report — BTS 2025
+# Completed Cleaning and EDA Report — BTS 2025
 
-This report covers the first full-pass EDA across all monthly files. Rankings use minimum-volume thresholds from `config/settings.yaml`.
+This report covers the completed descriptive EDA across all monthly files. Rankings use minimum-volume thresholds from `config/settings.yaml`.
 
 ## Overall performance
 
@@ -29,12 +29,17 @@ This report covers the first full-pass EDA across all monthly files. Rankings us
 - Airport-code join coverage against the standardized OurAirports dimension
 - Four reproducible figures in `reports/figures/`
 
-## Next EDA work
+## Final EDA additions
 
-- Investigate the top and bottom high-volume airports/routes with uncertainty and distribution plots.
-- Add median/quantile comparisons for groups where averages are distorted by extreme delays.
-- Review cancellation patterns by airport and month together.
-- Convert the evidence into notebook narration and final report-ready charts.
+- Expanded notebook with raw audit, explicit cleaning operations, and decisions.
+- Reviewed all six flagged records and 20 delay extremes without dropping flights.
+- Exact full-year, monthly, airline, and busiest-route/origin mean/median/quantiles.
+- Distribution plots using a documented 2,000-flight-per-month sample.
+- Highest/lowest origin-rate comparisons with minimum-volume filters.
+- Airport-month cancellation and route-month severe-delay heatmaps.
+- Full row reconciliation and an explicit ML feature/split handoff.
+
+The new figures are reproduced by `python scripts/execute_notebooks.py` after ETL.
 
 ## Limitations at this checkpoint
 
@@ -42,3 +47,5 @@ This report covers the first full-pass EDA across all monthly files. Rankings us
 - Airline codes are not expanded to names until an authoritative airline lookup is added.
 - Reported delay-cause fields describe delays after they occur and cannot be used for pre-departure prediction.
 - Associations do not establish causal effects.
+
+- Full-year EDA includes holdout outcomes; future model tuning must still respect the frozen chronological split.

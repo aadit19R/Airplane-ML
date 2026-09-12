@@ -36,23 +36,28 @@ NUMERIC_COLUMNS = [
 
 def scheduled_hour(values: pd.Series) -> pd.Series:
     """Convert BTS HHMM values to a nullable hour; treat 2400 as midnight."""
-    numeric = pd.to_numeric(values, errors="coerce").round()
+    numeric = pd.to_numeric(values, errors="coerce")
     minutes = numeric.mod(100)
-    valid = numeric.between(0, 2359) & minutes.between(0, 59)
+    valid = numeric.between(0, 2359) & minutes.between(0, 59) & numeric.mod(1).eq(0)
     hour = (numeric // 100).where(valid)
     hour = hour.mask(numeric.eq(2400), 0)
     return hour.astype("Int8")
 
 
-def departure_time_band(hours: pd.Series) -> pd.Series:
+def departure_time_band(hours: pd.Series, bands=None) -> pd.Series:
+    if bands is None:
+        bands = [
+            {"name": "Late Night", "start_hour": 0, "end_hour": 5},
+            {"name": "Morning", "start_hour": 6, "end_hour": 10},
+            {"name": "Midday", "start_hour": 11, "end_hour": 15},
+            {"name": "Evening", "start_hour": 16, "end_hour": 20},
+            {"name": "Night", "start_hour": 21, "end_hour": 23},
+        ]
     conditions = [
-        hours.between(0, 5),
-        hours.between(6, 10),
-        hours.between(11, 15),
-        hours.between(16, 20),
-        hours.between(21, 23),
+        hours.between(band["start_hour"], band["end_hour"]).fillna(False).to_numpy(dtype=bool)
+        for band in bands
     ]
-    labels = ["Late Night", "Morning", "Midday", "Evening", "Night"]
+    labels = [band["name"] for band in bands]
     result = np.select(conditions, labels, default=None)
     return pd.Series(result, index=hours.index, dtype="string")
 
@@ -64,13 +69,14 @@ def clean_chunk(
     source_year: int,
     source_month: int,
     severe_delay_minutes: int = 60,
+    time_bands=None,
 ) -> pd.DataFrame:
     """Standardize types and create documented features without dropping rows."""
     frame = raw.rename(columns=column_map).copy()
 
     for column in CODE_COLUMNS:
         if column in frame:
-            frame[column] = frame[column].astype("string").str.strip().str.upper()
+            frame[column] = frame[column].astype("string").str.strip().str.upper().replace("", pd.NA)
 
     for column in NUMERIC_COLUMNS:
         if column in frame:
@@ -89,7 +95,7 @@ def clean_chunk(
 
     frame["route"] = frame["origin"].str.cat(frame["destination"], sep="-")
     frame["scheduled_dep_hour"] = scheduled_hour(frame["crs_dep_time"])
-    frame["departure_time_band"] = departure_time_band(frame["scheduled_dep_hour"])
+    frame["departure_time_band"] = departure_time_band(frame["scheduled_dep_hour"], time_bands)
     frame["is_weekend"] = frame["day_of_week"].isin([6, 7]).astype("Int8")
     frame["season"] = frame["month"].map(
         {
@@ -114,6 +120,10 @@ def clean_chunk(
         & frame["arrival_delay_minutes"].notna()
     )
     frame["ml_target_eligible"] = eligible.astype("Int8")
+    frame["completed_missing_arrival_delay"] = (
+        frame["cancelled"].eq(0) & frame["diverted"].eq(0)
+        & frame["arrival_delay_minutes"].isna()
+    ).astype("Int8")
 
     severe = pd.Series(pd.NA, index=frame.index, dtype="Int8")
     severe.loc[eligible] = (
@@ -124,8 +134,8 @@ def clean_chunk(
     delay_category = pd.Series(pd.NA, index=frame.index, dtype="string")
     arrival_delay = frame["arrival_delay_minutes"]
     delay_category.loc[eligible & arrival_delay.le(0)] = "On Time / Early"
-    delay_category.loc[eligible & arrival_delay.between(1, 15)] = "Minor Delay"
-    delay_category.loc[eligible & arrival_delay.between(16, severe_delay_minutes)] = (
+    delay_category.loc[eligible & arrival_delay.gt(0) & arrival_delay.le(15)] = "Minor Delay"
+    delay_category.loc[eligible & arrival_delay.gt(15) & arrival_delay.le(severe_delay_minutes)] = (
         "Moderate Delay"
     )
     delay_category.loc[eligible & arrival_delay.gt(severe_delay_minutes)] = "Severe Delay"
@@ -136,11 +146,6 @@ def clean_chunk(
 def quality_issue_counts(frame: pd.DataFrame, expected_year: int, expected_month: int) -> dict[str, int]:
     """Count quality issues; counts are diagnostic and do not remove rows."""
     crs_dep = frame["crs_dep_time"]
-    crs_dep_minutes = crs_dep.mod(100)
-    invalid_crs_dep = ~(
-        (crs_dep.between(0, 2359) & crs_dep_minutes.between(0, 59))
-        | crs_dep.eq(2400)
-    )
     return {
         "unexpected_year": int((frame["year"].ne(expected_year) | frame["year"].isna()).sum()),
         "source_month_mismatch": int((frame["month"].ne(expected_month) | frame["month"].isna()).sum()),
@@ -161,7 +166,8 @@ def quality_issue_counts(frame: pd.DataFrame, expected_year: int, expected_month
         "nonpositive_distance": int(frame["distance_miles"].le(0).fillna(False).sum()),
         "invalid_cancelled_flag": int((~frame["cancelled"].isin([0, 1])).sum()),
         "invalid_diverted_flag": int((~frame["diverted"].isin([0, 1])).sum()),
-        "invalid_scheduled_departure_time": int((invalid_crs_dep | crs_dep.isna()).sum()),
+        "invalid_scheduled_departure_time": int(scheduled_hour(crs_dep).isna().sum()),
+        "invalid_scheduled_arrival_time": int(scheduled_hour(frame["crs_arr_time"]).isna().sum()),
         "nonpositive_scheduled_elapsed_time": int(frame["scheduled_elapsed_invalid"].eq(1).sum()),
         "negative_actual_elapsed_time": int(
             frame["actual_elapsed_minutes"].lt(0).fillna(False).sum()

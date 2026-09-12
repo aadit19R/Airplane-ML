@@ -290,8 +290,8 @@ def load_airport_dimension(
     valid["type_priority"] = valid["type"].map(type_priority).fillna(0)
     duplicate_iata_rows = int(valid.duplicated("iata_code", keep=False).sum())
     valid = valid.sort_values(
-        ["iata_code", "country_priority", "service_priority", "type_priority"],
-        ascending=[True, False, False, False],
+        ["iata_code", "country_priority", "service_priority", "type_priority", "ident"],
+        ascending=[True, False, False, False, True],
     )
     dimension_out = valid.drop_duplicates("iata_code", keep="first").drop(
         columns=["country_priority", "service_priority", "type_priority"]
@@ -299,6 +299,8 @@ def load_airport_dimension(
     dimension_out.insert(1, "source_iata_code", dimension_out["iata_code"])
     alias_rows = []
     for historical_code, current_code in (aliases or {}).items():
+        if dimension_out["iata_code"].eq(historical_code).any():
+            continue
         source = dimension_out.loc[dimension_out["iata_code"].eq(current_code)]
         if source.empty:
             raise ValueError(
@@ -676,6 +678,7 @@ def run() -> None:
                 expected_year,
                 month,
                 severe_threshold,
+                settings["features"]["departure_time_bands"],
             )
             state.update(raw, clean, expected_year, month, airport_codes)
             file_rows += len(raw)
