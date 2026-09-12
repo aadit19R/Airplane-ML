@@ -1,74 +1,37 @@
 # Airline Flight Delay Prediction & Operational Performance Analysis
 ## Codex CLI Project Brief / Master Plan
 
-> **Purpose of this file:** This is the single source of truth for implementing the project in Codex CLI.  
-> Codex should use this document to scaffold the repository, ingest the data, perform wrangling, build the SQL/warehouse layer, train and evaluate ML models, and prepare Power BI-ready outputs.
+> **Purpose of this file:** This is the current source of truth for project status, decisions, completed work, and remaining implementation.
 >
 > **Project status:** Cleaning, EDA, and transformation complete; warehouse and model training are next
 > **Primary domain:** Airline operations, flight delays, cancellations, airports  
 > **Primary dataset:** U.S. Bureau of Transportation Statistics (BTS) Reporting Carrier On-Time Performance  
 > **Data period:** January–December 2025 (one full calendar year)  
 > **Supporting dataset:** OurAirports `airports.csv`  
-> **Optional extension:** Weather data — **do not add in the initial implementation**
+> **Optional extension:** Weather data — add only after the core warehouse, ML, and dashboard are complete
 
-## Active implementation plan — 13 September 2026
+## Current checkpoint — 13 September 2026
 
-This checkpoint completes cleaning, EDA, and transformation. It supersedes the
-older first-pass status and suggested notebook filenames below; warehouse,
-model training, and Power BI remain subsequent milestones.
+- Cleaning, transformation, airport enrichment, feature engineering, and EDA
+  are complete and documented.
+- All 7,001,619 operational rows were retained; 6,879,484 eligible rows were
+  exported for the severe-arrival-delay model.
+- Twelve monthly Parquet files exist in each cleaned, enriched, and ML layer.
+- Both airport joins resolve every flight row. Five invalid scheduled durations
+  are flagged, and one completed flight with an unknown arrival outcome is
+  excluded from the target.
+- The frozen chronological split contains 4,592,366 training rows (Jan–Aug),
+  1,159,898 validation rows (Sep–Oct), and 1,127,220 test rows (Nov–Dec).
+- `01_beginner_eda.ipynb` and `02_feature_engineering.ipynb` execute without
+  errors, and all 12 current tests pass.
+- No model or learned preprocessing has been fitted. The next stages are the
+  SQLite warehouse, baseline and three classifiers, model interpretation, and
+  Power BI exports.
 
-1. Finish `notebooks/01_beginner_eda.ipynb`: explain raw schema, measured
-   missingness, duplicates, conversions, category normalization, before/after
-   cleaning, the six flagged records, extreme-delay context, and full-year EDA.
-   Preserve its existing findings and add distributions, airport comparisons,
-   and an airport-by-month cancellation heatmap with explicit denominators.
-2. Keep reusable logic in small pandas/NumPy functions. Retain operational
-   missingness and all source rows; flag invalid scheduled durations and the
-   completed flight with unknown arrival delay. Do not impute outcomes or
-   delete unusual but possible delays. Measure conversion failures and actual
-   category corrections instead of assuming that every row required repair.
-3. Add `scripts/run_etl.py` to refresh the source audit and persist one cleaned
-   and one enriched Parquet file per month. Validate schema, monthly dates,
-   calendar fields, duplicate candidates, row counts, targets, and both airport
-   joins. Retain source filename and original one-based data-row number.
-4. Create `notebooks/02_feature_engineering.ipynb` with visible examples of
-   route, calendar, scheduled-time, distance-band, and cyclic-time features;
-   two many-to-one airport merges; a group-by and pivot; and full-data exports.
-   Explain why each feature supports the operational or prediction question.
-5. Persist eligible ML rows using an explicit pre-departure feature allowlist,
-   plus the target, provenance, and chronological split labels. Freeze Jan–Aug
-   training, Sep–Oct validation, Nov–Dec testing. Leave imputation, scaling,
-   encoding, balancing, and model fitting to the ML stage; they must be fitted
-   on training data only. Do not use full-year delay summaries as predictors.
-   Current OurAirports labels are descriptive snapshot metadata; only physical
-   coordinates are candidate predictors, with the historical-snapshot limitation
-   documented. Preserve the existing source-supported PBI alias.
-6. Generate a concise final cleaning log, transformation/data dictionary,
-   reconciliation and split tables, and measured completion report. Test target
-   boundaries, invalid times, missing values, join cardinality, and split
-   boundaries. Execute both notebooks from fresh kernels and inspect charts.
-
-**Execution status — completed and verified:** The full ETL retained all
-7,001,619 operational rows and exported 6,879,484 eligible ML rows. Each of the
-three flight layers contains twelve monthly Parquet files; both endpoint joins
-resolve every row. Five impossible durations and one unknown completed outcome
-were handled with the documented flags/exclusions. Twenty extreme records were
-reviewed; all satisfied the delay/duration identity and were retained. Actual
-numeric/date parse failures and category corrections were both zero.
-
-`01_beginner_eda.ipynb` executed all 22 code cells, and
-`02_feature_engineering.ipynb` executed all 11 code cells in fresh kernels.
-All 12 tests passed, including Parquet type/value round trips. Saved charts were
-visually checked. Validation used pandas 2.3.3 and PyArrow 20.0.0 in the local
-project environment. Run `python scripts/run_etl.py`, then
-`python scripts/execute_notebooks.py` to reproduce the stage.
-
-The frozen split has 4,592,366 training, 1,159,898 validation, and 1,127,220 test
-rows. One missing scheduled duration remains among eligible predictors, in
-November; any later imputer must be fitted on training rows only. The target
-threshold and feature allowlist are fixed for the next stage. No models or
-learned preprocessing were fitted. See `reports/cleaning_log.md`,
-`reports/feature_dictionary.md`, and `reports/transformation_report.md`.
+Reproduce the completed stage with `python scripts/run_etl.py`, followed by
+`python scripts/execute_notebooks.py`. Detailed evidence is in
+`reports/cleaning_log.md`, `reports/feature_dictionary.md`, and
+`reports/transformation_report.md`.
 
 ---
 
@@ -86,7 +49,8 @@ The project will use large-scale real-world airline flight data to answer two br
    Which airlines, airports, routes, dates, and departure-time periods experience the highest delays and cancellations?
 
 2. **Machine learning:**  
-   Can historical and pre-departure flight information be used to predict whether a flight will experience a **severe arrival delay**?
+   Can pre-departure information predict whether an eligible flight will
+   experience a **severe arrival delay**, and which factors matter most?
 
 The complete project must demonstrate:
 
@@ -112,24 +76,40 @@ The project must remain understandable enough to explain clearly in a college vi
 
 ## Primary Question
 
-**Can we predict whether a scheduled domestic U.S. flight will experience a severe arrival delay using information available before departure?**
+**Can we predict severe arrival delays of more than 60 minutes for completed,
+non-diverted U.S. flights using only pre-flight information—airline, route,
+scheduled time, calendar features, distance, scheduled duration, and static
+airport location—and which factors matter most?**
 
 ## Secondary Questions
 
-1. Which airlines have the highest and lowest delay rates?
-2. Which origin airports experience the highest average departure delays?
-3. Which destination airports experience the highest average arrival delays?
-4. Which routes have the highest severe-delay rates?
-5. How do delays change by:
-   - month,
-   - day of week,
-   - hour of departure,
-   - weekend vs weekday,
-   - season?
-6. Which airlines and airports have the highest cancellation rates?
-7. What are the most common reported delay causes?
-8. Are some routes consistently more delay-prone than others?
-9. How well can a simple baseline model predict severe delays compared with machine-learning models?
+1. **Does the machine-learning model identify severe delays better than a simple baseline when evaluated on future flights?**
+
+   Compare Logistic Regression, Decision Tree, and Random Forest against an
+   always-predict-non-severe baseline on the validation set. Select the model
+   there, then compare only the selected model and baseline on the untouched
+   November–December test set. Use recall, precision, F1, PR-AUC, ROC-AUC, and
+   balanced accuracy—not accuracy alone.
+
+2. **Which pre-flight features contribute most to the model's predictions of severe flight delays?**
+
+   Examine model coefficients and feature importance for airline, route,
+   airports, scheduled departure time, derived calendar features, season,
+   distance, and scheduled duration. Compare these model explanations with the
+   patterns found during EDA, while avoiding causal claims. The raw flight date
+   is split metadata rather than a model predictor.
+
+3. **For which flights does the selected model make the most mistakes?**
+
+   Analyse false negatives and false positives by airline, origin airport,
+   destination airport, route, month, season, and departure-time band. Determine
+   whether errors are concentrated in particular operational groups or periods.
+
+4. **Which probability threshold provides the most useful balance between detecting severe delays and avoiding false alarms?**
+
+   Use the validation set's precision-recall results to select a threshold under
+   a stated rule, such as maximizing F1 or achieving a required recall. Apply
+   that threshold once to the final test set and report its practical effect.
 
 ## 3.1 Literature-derived problem definition
 
@@ -139,7 +119,7 @@ A review of ten relevant flight-delay prediction papers identified twenty paper-
 2. **Broad and time-aware evaluation:** use the full 2025 U.S. domestic network in the project data and test on chronologically later months rather than a random holdout.
 3. **Imbalance-aware evaluation:** preserve the natural severe-delay rate in validation/testing and report minority-sensitive metrics instead of accuracy alone.
 
-**Problem definition:** Existing studies may report strong flight-delay performance using restricted airport/route samples, random or artificially balanced evaluations, or variables that are unavailable before the outcome. This project will therefore develop and evaluate an explainable, leakage-controlled, and imbalance-aware machine-learning pipeline to predict whether a scheduled domestic U.S. flight will arrive more than 60 minutes late, using only pre-departure information and a chronological future-month holdout.
+**Problem definition:** Existing studies may report strong flight-delay performance using restricted airport/route samples, random or artificially balanced evaluations, or variables that are unavailable before the outcome. This project will therefore develop and evaluate an explainable, leakage-controlled, and imbalance-aware machine-learning pipeline to predict whether a completed, non-diverted domestic U.S. flight with a known arrival outcome will arrive more than 60 minutes late, using only pre-departure information and a chronological future-month holdout.
 
 The complete paper-by-paper review, gap matrix, evidence labels, selected-gap rationale, and references are documented in `reports/literature_review_and_research_gaps.md`.
 
@@ -325,7 +305,7 @@ The delay-cause columns are useful for **descriptive analysis**, but they must *
 
 # 6. Scope Decision
 
-## Initial Project Scope
+## Core Project Scope
 
 Use:
 
@@ -335,9 +315,10 @@ BTS 2025 (January–December)
 OurAirports airports.csv
 ```
 
-### Not Included Initially
+### Outside the Core Scope
 
-Do not add external weather data during the first implementation.
+Do not add external weather data until the core warehouse, ML comparison, and
+dashboard are complete.
 
 Weather can be added later only as a documented extension if:
 
@@ -346,29 +327,11 @@ Weather can be added later only as a documented extension if:
 - the team has enough time,
 - the additional source clearly improves the model or analysis.
 
-## Historical Implementation Checkpoint — 9 September 2026
-
-Completed against the full 2025 dataset:
-
-- all 12 BTS files organized and validated (7,001,619 rows),
-- consistent 28-column schema and correct monthly date coverage confirmed,
-- missingness, data types, unique counts, numeric ranges, invalid values, and duplicates audited,
-- explainable route/time/calendar/target features implemented,
-- OurAirports dimension standardized and 100% of BTS airport codes matched using one documented historical alias,
-- first-pass airline, airport, route, time, cancellation, and delay-cause EDA completed,
-- four reproducible figures and five evidence-backed candidate insights generated.
-
-This exceeds the current goal of completing at least half of the cleaning/EDA work.
-The immediate next step is to persist cleaned flight partitions, investigate the
-small flagged-row set and extreme-delay context, then convert the audit and EDA
-outputs into viva-friendly notebooks. Warehouse construction and ML follow only
-after the cleaned schema is frozen.
-
 ---
 
-# 7. Recommended Repository Structure
+# 7. Repository Structure and Planned Additions
 
-Codex should scaffold approximately this structure:
+Current files and planned additions follow. Planned items are labelled.
 
 ```text
 airline-delay-project/
@@ -407,31 +370,29 @@ airline-delay-project/
 │   └── schema.sql
 │
 ├── notebooks/
-│   ├── 01_data_audit.ipynb
-│   ├── 02_cleaning_and_transformation.ipynb
-│   ├── 03_eda_and_insights.ipynb
-│   ├── 04_machine_learning.ipynb
-│   └── 05_model_interpretation.ipynb
+│   ├── 01_beginner_eda.ipynb
+│   ├── 02_feature_engineering.ipynb
+│   ├── 03_machine_learning.ipynb          # planned
+│   └── 04_model_interpretation.ipynb      # planned
 │
 ├── src/
 │   ├── __init__.py
 │   ├── config.py
-│   ├── ingest.py
 │   ├── clean.py
-│   ├── transform.py
-│   ├── validate.py
-│   ├── warehouse.py
 │   ├── features.py
-│   ├── model.py
-│   ├── evaluate.py
-│   └── export_powerbi.py
+│   ├── initial_analysis.py
+│   ├── etl.py
+│   ├── warehouse.py                       # planned
+│   ├── model.py                           # planned
+│   └── export_powerbi.py                  # planned
 │
 ├── scripts/
-│   ├── run_ingestion.py
+│   ├── run_initial_analysis.py
 │   ├── run_etl.py
-│   ├── build_database.py
-│   ├── train_models.py
-│   └── export_powerbi.py
+│   ├── execute_notebooks.py
+│   ├── build_database.py                  # planned
+│   ├── train_models.py                    # planned
+│   └── export_powerbi.py                  # planned
 │
 ├── models/
 │   ├── trained/
@@ -1155,7 +1116,9 @@ Never put them into the final report as facts until verified.
 
 ## Problem Type
 
-Binary classification.
+Binary classification for completed, non-diverted flights with a known arrival
+delay. Cancelled, diverted, and unknown-outcome rows remain in operational data
+but are excluded from model fitting and evaluation.
 
 ## Target
 
@@ -1166,13 +1129,11 @@ severe_delay
 Definition:
 
 ```text
-1 -> ArrDelayMinutes > 60
-0 -> ArrDelayMinutes <= 60
+1 -> arrival_delay_minutes > 60
+0 -> arrival_delay_minutes <= 60
 ```
 
-Cancelled flights should normally be excluded from this arrival-delay classification model.
-
-Document the exact filtering rule.
+Exactly 60 minutes is non-severe. The threshold is frozen before model fitting.
 
 ---
 
@@ -1188,39 +1149,41 @@ This is one of the most important rules in the project.
 
 ---
 
-# 22. Allowed Candidate ML Features
+# 22. Frozen Candidate ML Features
 
-Examples:
+The authoritative allowlist is `MODEL_FEATURES` in `src/features.py` and is
+documented in `reports/feature_dictionary.md`. It currently contains:
 
 ```text
-Year
-Quarter
-Month
-DayOfWeek
-scheduled_dep_hour
-departure_time_band
+quarter
+month
+day_of_month
+day_of_week
 is_weekend
+scheduled_dep_hour
+scheduled_arr_hour
+departure_time_band
 season
-
-Reporting_Airline
-Origin
-Dest
+dep_time_sin
+dep_time_cos
+reporting_airline
+origin
+destination
 route
-
-Distance
-CRSElapsedTime
+distance_miles
+distance_band
+scheduled_elapsed_minutes
+scheduled_elapsed_invalid
+origin_latitude_deg
+origin_longitude_deg
+destination_latitude_deg
+destination_longitude_deg
 ```
 
-Potential carefully constructed historical features:
-
-```text
-historical_airline_delay_rate
-historical_origin_delay_rate
-historical_destination_delay_rate
-historical_route_delay_rate
-```
-
-These historical features must be created without leakage.
+Year is constant in this one-year dataset. Raw `flight_date`, `source_file`,
+`source_row_number`, and `dataset_split` are metadata and are excluded from X.
+Target-derived historical rate features are deferred; do not add them to the
+initial models.
 
 ---
 
@@ -1246,6 +1209,10 @@ AirTime
 Cancelled
 CancellationCode
 Diverted
+ml_target_eligible
+completed_missing_arrival_delay
+delay_category
+severe_delay
 
 CarrierDelay
 WeatherDelay
@@ -1262,9 +1229,7 @@ They may still be used in descriptive analysis.
 
 # 24. Train/Test Strategy
 
-Because this is time-based operational data, prefer a chronological split rather than a purely random split.
-
-Recommended approach:
+The chronological split is frozen as:
 
 ```text
 TRAIN:
@@ -1281,28 +1246,24 @@ This makes the experiment closer to:
 
 > train on historical flights, evaluate on future flights.
 
-The exact date boundaries may be adjusted before model training if data-quality
-checks reveal incomplete periods, but the final split must remain chronological
-and must be frozen before model comparison. With only one calendar year, the
-model cannot claim year-over-year generalization; this limitation must be stated
-in the report.
-
-Do not fit encoders, scalers, imputers, or target-derived historical features using test data.
+Do not change these boundaries after viewing model results. Fit encoders,
+scalers, imputers, class weights, and any resampling using training data only.
+Use validation data for model and threshold selection, then evaluate the chosen
+model and threshold once on test data. With only one calendar year, the model
+cannot claim year-over-year generalization.
 
 ---
 
 # 25. Models to Compare
 
-At minimum compare two meaningful approaches.
-
-Recommended:
+Compare all four approaches below on the same frozen splits and feature policy.
 
 ## Model 0 — Baseline
 
-Possible baseline:
-
-- always predict the majority class, or
-- stratified/simple rule baseline
+- Use `DummyClassifier(strategy="most_frequent")`.
+- It always predicts the non-severe majority class and ignores the features.
+- Its high accuracy is not evidence of severe-delay detection; its severe-class
+  recall and F1 will be zero.
 
 ## Model 1 — Logistic Regression
 
@@ -1322,8 +1283,6 @@ Purpose:
 
 ## Model 3 — Random Forest
 
-Optional but recommended.
-
 Purpose:
 
 - stronger ensemble comparison
@@ -1338,7 +1297,8 @@ Do not add advanced models merely to make the project look complicated.
 
 # 26. ML Evaluation Metrics
 
-Because severe delays may be imbalanced, do not report only accuracy.
+Because severe delays are imbalanced, use the same metrics for every model and
+do not select a model using accuracy alone.
 
 Report:
 
@@ -1346,13 +1306,11 @@ Report:
 - Precision
 - Recall
 - F1-score
+- Balanced accuracy
 - Confusion matrix
-- ROC-AUC where appropriate
-- class distribution
-
-If severe-delay prevalence is low, additionally consider:
-
+- ROC-AUC
 - PR-AUC / Average Precision
+- class distribution
 
 Interpret the metrics in plain language.
 
@@ -1364,15 +1322,17 @@ Example:
 
 # 27. Model Interpretation
 
-For the best model, produce:
+For the selected model, produce:
 
 - feature importance or coefficient analysis
-- confusion matrix
-- performance by year
-- performance by airline if useful
-- performance by major airport if useful
+- validation precision-recall curve and documented threshold rule
+- final test confusion matrix at the selected threshold
+- false-negative and false-positive analysis by month, airline, origin,
+  destination, route, season, and departure-time band where sample sizes allow
+- performance comparison with the EDA patterns
 
-Do not imply that feature importance proves causation.
+Do not imply that feature importance proves causation. Apply minimum-volume
+rules to subgroup conclusions and report counts with rates.
 
 ---
 
@@ -1483,11 +1443,15 @@ State
 - Precision
 - Recall
 - F1
-- ROC-AUC if used
+- Balanced Accuracy
+- ROC-AUC
+- PR-AUC / Average Precision
 - confusion matrix
 - feature importance
+- selected probability threshold and precision-recall trade-off
+- false-negative and false-positive subgroup analysis
 - actual vs predicted severe-delay counts
-- prediction results sliced by airline/airport if practical
+- prediction results sliced by airline, airport, route, month, season, and time band where sample sizes allow
 
 ### Stakeholder Question
 
@@ -1497,25 +1461,9 @@ State
 
 # 30. Cleaning & Transformation Log
 
-Maintain:
-
-```text
-reports/cleaning_log.md
-```
-
-Suggested format:
-
-```markdown
-## Cleaning Action 001
-
-**Issue:** Missing ArrDelayMinutes  
-**Rows affected:** X  
-**Investigation:** Most affected rows are cancelled/diverted flights.  
-**Action:** Excluded from severe-arrival-delay target construction; retained in operational dataset.  
-**Reason:** Arrival delay cannot be validly imputed for a cancelled flight.
-```
-
-The log is a formal project deliverable, not an afterthought.
+The completed log is `reports/cleaning_log.md`. It records each issue, measured
+row count, action, justification, and intentionally retained condition. Refresh
+it whenever cleaning logic or source data changes.
 
 ---
 
@@ -1539,79 +1487,43 @@ Automate checks where possible.
 - airport join coverage is reported
 - source row counts are tracked before and after cleaning
 
-## Row-Reconciliation Table
+## Row Reconciliation
 
-Maintain something similar to:
-
-| Stage | Rows | Rows Removed | Reason |
-|---|---:|---:|---|
-| Raw ingestion | ... | — | — |
-| Schema validation | ... | ... | malformed records |
-| Deduplication | ... | ... | confirmed duplicates |
-| ML eligibility filter | ... | ... | cancelled/no valid target |
-| Final ML dataset | ... | — | — |
+The completed monthly reconciliation is
+`reports/tables/final_row_reconciliation.csv`. It distinguishes rows retained in
+the operational data from rows excluded only because the ML target is undefined.
 
 ---
 
 # 32. Reproducibility
 
-The entire pipeline should be runnable from raw files.
-
-Preferred commands:
+The completed stages are reproducible from raw files with:
 
 ```bash
-python scripts/run_ingestion.py
 python scripts/run_etl.py
+python scripts/execute_notebooks.py
+```
+
+The remaining planned stage commands are:
+
+```bash
 python scripts/build_database.py
 python scripts/train_models.py
 python scripts/export_powerbi.py
 ```
 
-Optional master command:
-
-```bash
-python -m src.pipeline
-```
-
-If a master pipeline is implemented, individual stage commands should still remain understandable.
+Add those commands only with their corresponding implementation. Keep each
+stage independently understandable and testable.
 
 ---
 
 # 33. Configuration
 
-Do not hard-code important project decisions throughout the codebase.
-
-Put them in:
-
-```text
-config/settings.yaml
-```
-
-Example:
-
-```yaml
-project:
-  start_year: 2025
-  end_year: 2025
-
-target:
-  severe_delay_minutes: 60
-
-paths:
-  raw_bts: data/raw/bts
-  raw_airports: data/raw/airports/airports.csv
-  processed: data/processed
-  database: database/airline_dw.sqlite
-
-features:
-  include_historical_features: false
-
-model:
-  train_end_date: 2025-08-31
-  validation_end_date: 2025-10-31
-  test_end_date: 2025-12-31
-  random_state: 42
-```
+`config/settings.yaml` is authoritative for source/output paths, chunk size,
+the 60-minute target, group-ranking thresholds, departure-time bands, the PBI
+airport alias, chronological split dates, and random seed. Do not duplicate
+these values in production code. `src/features.py` is authoritative for the
+model feature allowlist and blocked outcome fields.
 
 ---
 
@@ -1621,57 +1533,47 @@ The notebooks are for explanation, visual evidence, and viva readability.
 
 Core production logic should live in `src/`.
 
-## `01_data_audit.ipynb`
+## `01_beginner_eda.ipynb` — complete
 
-Show:
+Contains:
 
 - source overview
-- shapes
-- columns
-- data types
-- missing values
-- duplicates
-- basic statistics
+- shapes, columns, data types, missingness, and duplicates
+- cleaning decisions and before/after examples
+- flagged-record and extreme-delay review
+- operational EDA and evidence-backed findings
+- final row reconciliation
 
-## `02_cleaning_and_transformation.ipynb`
+## `02_feature_engineering.ipynb` — complete
 
-Show:
+Contains:
 
-- cleaning decisions
 - before/after examples
-- transformation logic
-- airport join
-- engineered features
-- quality validation
+- route, calendar, scheduled-time, distance, and cyclic-time features
+- origin and destination airport joins
+- group-by and pivot transformations
+- feature allowlist, leakage exclusions, and chronological split
+- persisted-output validation
 
-## `03_eda_and_insights.ipynb`
-
-Show:
-
-- operational analysis
-- key visualizations
-- candidate insights
-- final evidence-backed insights
-
-## `04_machine_learning.ipynb`
+## `03_machine_learning.ipynb` — planned
 
 Show:
 
 - target definition
-- feature selection
-- leakage explanation
-- train/test split
-- preprocessing
-- baseline
-- model comparison
-- evaluation
+- frozen feature selection and chronological split
+- training-only preprocessing
+- majority baseline, Logistic Regression, Decision Tree, and Random Forest
+- validation model comparison and threshold selection
+- one final November–December test evaluation
 
-## `05_model_interpretation.ipynb`
+## `04_model_interpretation.ipynb` — planned
 
 Show:
 
-- feature importance
-- error analysis
+- coefficients and feature importance
+- false-negative and false-positive subgroup analysis
+- comparison between model explanations and EDA
+- operational interpretation of the chosen threshold
 - limitations
 - export of prediction results
 
@@ -1749,7 +1651,7 @@ The project should eventually produce:
 
 ---
 
-# 37. Suggested Project Milestones
+# 37. Project Milestones
 
 ## Milestone 1 — Repository & Data
 
@@ -1799,17 +1701,17 @@ The project should eventually produce:
 
 ## Milestone 6 — EDA
 
-- [x] airline analysis (first pass)
-- [x] airport analysis (first pass)
-- [x] route analysis (first pass)
-- [x] time analysis (first pass)
-- [x] cancellation analysis (first pass)
-- [x] delay-cause analysis (first pass)
-- [x] 3+ evidence-backed candidate insights
+- [x] airline analysis
+- [x] airport analysis
+- [x] route analysis
+- [x] time analysis
+- [x] cancellation analysis
+- [x] delay-cause analysis
+- [x] 3+ evidence-backed insights
 
 ## Milestone 7 — ML
 
-- [x] finalize target (ARR_DELAY > 60 on eligible completed flights)
+- [x] finalize target (ARR_DELAY > 60 on completed, non-diverted flights with known outcomes)
 - [x] leakage-safe candidate feature allowlist (no fitted preprocessing yet)
 - [x] chronological split (Jan–Aug / Sep–Oct / Nov–Dec)
 - [ ] baseline
@@ -1817,7 +1719,7 @@ The project should eventually produce:
 - [ ] Decision Tree
 - [ ] Random Forest
 - [ ] evaluate metrics
-- [ ] interpret best model
+- [ ] interpret selected model
 
 ## Milestone 8 — Power BI Exports
 
@@ -1849,7 +1751,7 @@ The coding portion is considered complete when:
 - a valid dimensional model exists,
 - at least three non-obvious findings are supported by statistics/visuals,
 - a severe-delay ML task is implemented without obvious target leakage,
-- at least a baseline plus two ML models are evaluated,
+- the majority baseline, Logistic Regression, Decision Tree, and Random Forest are evaluated,
 - model metrics are exported,
 - Power BI-ready files are generated,
 - all major scripts run end-to-end without manual code edits,
@@ -1871,132 +1773,31 @@ Codex must follow these rules.
 
 ## Machine Learning
 
-6. **Never use target-leaking post-flight fields as predictors.**
-7. Never use `ArrDelay`, `ArrDelayMinutes`, `ArrDel15`, or delay-cause columns to predict severe arrival delay.
-8. Do not use test data to fit preprocessing.
-9. Do not calculate full-dataset target averages and use them as historical predictors.
-10. Do not optimize only for accuracy if the target is imbalanced.
-11. Do not fabricate model results.
-12. Do not change the target threshold merely because a different threshold gives better metrics.
+6. Follow the frozen target, population, feature, split, and evaluation contract
+   in Sections 20–27.
+7. Fit all learned preprocessing and resampling on training rows only.
+8. Select the model and probability threshold on validation data, then evaluate
+   once on the untouched test set.
+9. Do not fabricate results, optimize accuracy alone, add post-flight features,
+   or change the target threshold after viewing model performance.
 
 ## Analysis
 
-13. Do not state an insight until it is calculated from the data.
-14. Distinguish correlation/association from causation.
-15. Apply sensible minimum-flight thresholds to "best/worst" airline, airport, and route rankings.
-16. Preserve both average and median delay where outliers make the mean misleading.
+10. Do not state an insight until it is calculated from the data.
+11. Distinguish correlation/association from causation.
+12. Apply sensible minimum-flight thresholds to "best/worst" airline, airport, and route rankings.
+13. Preserve both average and median delay where outliers make the mean misleading.
 
 ## Engineering
 
-17. Avoid loading the entire full-year raw dataset into memory when a chunked/partitioned approach is safer.
-18. Keep production code in `src/`; notebooks should call reusable functions.
-19. Add tests for critical cleaning and feature logic.
-20. Prefer simple, explainable implementation over unnecessary complexity.
+14. Avoid loading the entire full-year raw dataset into memory when a chunked/partitioned approach is safer.
+15. Keep production code in `src/`; notebooks should call reusable functions.
+16. Add tests for critical cleaning, feature, split, and model logic.
+17. Prefer simple, explainable implementation over unnecessary complexity.
 
 ---
 
-# 40. First Tasks for Codex CLI
-
-When this file is first given to Codex, begin with the following sequence.
-
-## Step 1 — Inspect Existing Directory
-
-Do not overwrite existing work.
-
-Identify:
-
-- current files
-- available raw datasets
-- Python version
-- existing virtual environment
-- installed dependencies
-
-## Step 2 — Scaffold Missing Project Structure
-
-Create only missing directories/files described above.
-
-## Step 3 — Create Setup Files
-
-Generate:
-
-```text
-README.md
-requirements.txt
-.gitignore
-config/settings.yaml
-```
-
-The `.gitignore` should exclude large raw/processed datasets, database files if appropriate, environments, caches, and trained model binaries unless deliberately versioned.
-
-## Step 4 — Build a Data Manifest Tool
-
-Before writing ML code, create a script that scans:
-
-```text
-data/raw/bts/
-```
-
-and reports:
-
-- which months from 2025 are present,
-- which are missing,
-- filename,
-- file size,
-- row count where feasible,
-- columns,
-- schema differences.
-
-Expected output:
-
-```text
-reports/source_manifest.csv
-```
-
-## Step 5 — Implement Ingestion
-
-Implement robust multi-file ingestion and schema standardization.
-
-## Step 6 — Stop and Report
-
-After ingestion infrastructure exists, report:
-
-- files detected,
-- missing months,
-- schema inconsistencies,
-- approximate total rows,
-- next recommended action.
-
-Do not jump immediately to model training before data quality is understood.
-
----
-
-# 41. Suggested Initial Prompt to Codex CLI
-
-After placing this file in the repository, use something close to:
-
-```text
-Read PROJECT_PLAN.md completely and treat it as the project's source of truth.
-
-Start by inspecting the existing repository and raw-data directories. Do not modify any raw data.
-
-Then:
-1. scaffold only the missing repository structure,
-2. create the Python environment/dependency files,
-3. implement a BTS source-manifest/audit script,
-4. detect which 2025 monthly files are present or missing,
-5. inspect schema consistency across the available files,
-6. implement the ingestion layer and interim partitioned output,
-7. add basic tests for ingestion/schema validation,
-8. update README.md with exact commands to run what you implemented.
-
-Do not build the ML models yet. Do not fabricate data or results. Follow all leakage and cleaning guardrails in PROJECT_PLAN.md.
-
-At the end, summarize exactly what was created, what data was found, any issues, and the next recommended implementation step.
-```
-
----
-
-# 42. Future Optional Extensions
+# 40. Future Optional Extensions
 
 Only after the core project is stable:
 
@@ -2042,15 +1843,15 @@ This is optional and should not distract from the main project.
 
 ---
 
-# 43. Key Viva Explanation
+# 41. Key Viva Explanation
 
 A concise explanation of the project:
 
-> We are using the U.S. Bureau of Transportation Statistics Reporting Carrier On-Time Performance dataset for all flights reported from January through December 2025, along with airport metadata from OurAirports. We will take the raw data through the complete data-wrangling pipeline: extraction, cleaning, transformation, joining, feature engineering, validation, and SQL loading. We will then analyze airline, airport, route, and time-based delay patterns and build a classification model that predicts whether a completed flight will have an arrival delay of more than 60 minutes using only information available before departure. Finally, we will communicate the operational and model insights through a three-page Power BI dashboard.
+> We are using all January–December 2025 U.S. BTS flight records with OurAirports metadata. Cleaning, transformation, airport joining, feature engineering, validation, and EDA are complete. We retained every operational row and prepared a leakage-controlled ML dataset for completed, non-diverted flights with known arrival outcomes. Next, we will build the SQLite warehouse and compare a majority baseline, Logistic Regression, Decision Tree, and Random Forest using a chronological future-month holdout. We will select the model and probability threshold on validation data, evaluate once on November–December test data, explain its errors and important features, and prepare a three-page Power BI dashboard.
 
 ---
 
-# 44. Final Project Philosophy
+# 42. Final Project Philosophy
 
 The objective is **not** to create the most complicated airline model possible.
 
