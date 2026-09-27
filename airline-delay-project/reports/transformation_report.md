@@ -7,7 +7,7 @@
 - Both airport merges validated as many-to-one; zero unmatched flight rows.
 - Exact full-year and group delay quantiles, contextual extreme review, monthly
   airport cancellations, and route-month aggregates generated from every month.
-- Predictor allowlist: `src/features.py`; column types/roles: `tables/data_dictionary.csv`.
+- Predictor allowlist: `src/features.py`; column types/roles: `tables/07_ml_preparation/data_dictionary.csv`.
 
 ## Chronological ML handoff
 

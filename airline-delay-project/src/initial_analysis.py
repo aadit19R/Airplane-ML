@@ -19,6 +19,7 @@ import pandas as pd
 
 from src.clean import NUMERIC_COLUMNS, clean_chunk, quality_issue_counts
 from src.config import load_column_map, load_settings, project_path
+from src.report_paths import TABLE_GROUPS, table_path
 
 
 BUSINESS_KEY = [
@@ -494,7 +495,7 @@ No records were removed during this initial phase. Candidate issues remain trace
 ## Action 004 — Missing operational values
 
 **Issue:** Actual times, arrival delay, elapsed time, and air time can be missing for cancelled or diverted flights.  
-**Rows affected:** See `reports/tables/column_profile.csv`.  
+**Rows affected:** See `reports/tables/03_cleaning/column_profile.csv`.
 **Action:** Missing operational values were retained. No blanket imputation or `dropna()` was applied.  
 **Reason:** These nulls can describe a flight outcome and should not be converted to fictional values.
 
@@ -609,6 +610,8 @@ def run() -> None:
     figures_dir = project_path(settings["paths"]["figures"])
     reports_dir.mkdir(parents=True, exist_ok=True)
     tables_dir.mkdir(parents=True, exist_ok=True)
+    for folder in TABLE_GROUPS:
+        (tables_dir / folder).mkdir(parents=True, exist_ok=True)
 
     airport_output = project_path("data/interim/airports_standardized/airports_standardized.csv")
     _, airport_codes, airport_metadata = load_airport_dimension(
@@ -724,7 +727,7 @@ def run() -> None:
         raise FileNotFoundError(f"No BTS CSV files found in {raw_dir}")
 
     manifest = pd.DataFrame(manifest_rows)
-    manifest.to_csv(reports_dir / "source_manifest.csv", index=False)
+    manifest.to_csv(table_path(tables_dir, "source_manifest"), index=False)
 
     column_profile = pd.DataFrame(
         [
@@ -738,7 +741,7 @@ def run() -> None:
             for column in state.raw_columns
         ]
     )
-    column_profile.to_csv(tables_dir / "column_profile.csv", index=False)
+    column_profile.to_csv(table_path(tables_dir, "column_profile"), index=False)
 
     numeric_ranges = pd.DataFrame(
         [
@@ -746,29 +749,29 @@ def run() -> None:
             for column in state.numeric_min
         ]
     )
-    numeric_ranges.to_csv(tables_dir / "numeric_ranges.csv", index=False)
+    numeric_ranges.to_csv(table_path(tables_dir, "numeric_ranges"), index=False)
 
     issues = pd.DataFrame(
         [{"issue": name, "rows_affected": count} for name, count in state.issue_counts.items()]
     )
-    issues.to_csv(tables_dir / "data_quality_issues.csv", index=False)
+    issues.to_csv(table_path(tables_dir, "data_quality_issues"), index=False)
     flagged = (
         pd.concat(state.flagged_samples, ignore_index=True)
         if state.flagged_samples
         else pd.DataFrame()
     )
-    flagged.to_csv(tables_dir / "flagged_row_samples.csv", index=False)
+    flagged.to_csv(table_path(tables_dir, "flagged_row_samples"), index=False)
 
     tables: dict[str, pd.DataFrame] = {}
     for name, keys in GROUPS.items():
         table = _finalize_group(state.grouped[name], keys)
         tables[name] = table
-        table.to_csv(tables_dir / f"{name}.csv", index=False)
+        table.to_csv(table_path(tables_dir, name), index=False)
 
     cancellation_table = pd.DataFrame(
         sorted(state.cancellation_codes.items()), columns=["cancellation_code", "cancelled_flights"]
     )
-    cancellation_table.to_csv(tables_dir / "cancellation_code_counts.csv", index=False)
+    cancellation_table.to_csv(table_path(tables_dir, "cancellation_code_counts"), index=False)
 
     total_cause_minutes = sum(state.cause_minutes.values())
     cause_table = pd.DataFrame(
@@ -785,7 +788,7 @@ def run() -> None:
             for column in CAUSE_COLUMNS
         ]
     )
-    cause_table.to_csv(tables_dir / "delay_cause_summary.csv", index=False)
+    cause_table.to_csv(table_path(tables_dir, "delay_cause_summary"), index=False)
 
     origin_matched = state.origin_codes & airport_codes
     destination_matched = state.destination_codes & airport_codes
@@ -813,7 +816,7 @@ def run() -> None:
             },
         ]
     )
-    join_table.to_csv(tables_dir / "airport_join_coverage.csv", index=False)
+    join_table.to_csv(table_path(tables_dir, "airport_join_coverage"), index=False)
     unmatched_rows = []
     for perspective, counts in state.unmatched_airport_codes.items():
         unmatched_rows.extend(
@@ -821,7 +824,7 @@ def run() -> None:
             for code, count in counts.most_common()
         )
     pd.DataFrame(unmatched_rows, columns=["perspective", "iata_code", "flight_rows"]).to_csv(
-        tables_dir / "unmatched_airport_codes.csv", index=False
+        table_path(tables_dir, "unmatched_airport_codes"), index=False
     )
 
     monthly = tables["monthly_performance"]
@@ -844,7 +847,7 @@ def run() -> None:
         "diversion_rate": total_diverted / state.total_rows,
     }
     pd.DataFrame([{"metric": key, "value": value} for key, value in overall.items()]).to_csv(
-        tables_dir / "overall_summary.csv", index=False
+        table_path(tables_dir, "overall_summary"), index=False
     )
     row_reconciliation = pd.DataFrame(
         [
@@ -854,7 +857,7 @@ def run() -> None:
             {"stage": "ML target eligibility", "rows": total_eligible, "rows_removed": state.total_rows - total_eligible, "reason": "Cancelled, diverted, or unknown arrival outcome excluded from target only"},
         ]
     )
-    row_reconciliation.to_csv(tables_dir / "row_reconciliation.csv", index=False)
+    row_reconciliation.to_csv(table_path(tables_dir, "row_reconciliation"), index=False)
 
     thresholds = {key: int(value) for key, value in settings["ranking_thresholds"].items()}
     _plot_outputs(tables, cause_table, figures_dir, thresholds)

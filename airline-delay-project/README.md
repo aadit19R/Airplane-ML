@@ -29,14 +29,21 @@ airline-delay-project/
 │   │   └── airports/airports.csv
 │   ├── interim/
 │   └── processed/
-├── docs/Data_Wrangling_Project_Guidelines.pdf
+├── Professors guideline doc/
 ├── reports/
 │   ├── figures/
 │   └── tables/
+│       ├── 02_ingestion/
+│       ├── 03_cleaning/
+│       ├── 04_transformation/
+│       ├── 06_eda/
+│       ├── 07_ml_preparation/
+│       └── README.md
 ├── scripts/
 ├── src/
 └── tests/
 ```
+
 
 Raw files are never edited by the pipeline.
 
@@ -62,18 +69,18 @@ python scripts/execute_notebooks.py
 
 The ETL script runs the source audit, final cleaning, airport joins, feature engineering, and validation. It regenerates:
 
-- `reports/source_manifest.csv`
+- `reports/tables/02_ingestion/source_manifest.csv`
 - `reports/data_quality_report.md`
 - `reports/cleaning_log.md`
 - `reports/eda_progress_report.md`
-- detailed CSV tables in `reports/tables/`
+- detailed CSV tables in milestone folders under `reports/tables/` (see `reports/tables/README.md`)
 - baseline PNG figures in `reports/figures/`; notebook execution adds the remaining charts
 - `data/interim/airports_standardized/airports_standardized.csv`
 - `data/interim/flights_standardized/2025_MM.parquet` (all cleaned operational rows)
 - `data/processed/flights_wrangled/2025_MM.parquet` (enriched operational rows)
 - `data/processed/flights_ml/2025_MM.parquet` (eligible rows with features, target, and split)
 - final reconciliation, conversion audit, missingness-by-status, distribution, and split tables
-- `reports/transformation_report.md` and `reports/tables/data_dictionary.csv`
+- `reports/transformation_report.md` and `reports/tables/07_ml_preparation/data_dictionary.csv`
 
 Each flight layer contains 12 monthly files. Large data and generated PNG/CSV outputs are ignored by Git; both executed notebooks and Markdown reports can be committed. Rerunning ETL refreshes generated outputs and never edits raw sources. The older `scripts/run_initial_analysis.py` remains an audit-only entrypoint; use the full ETL command for current final reports.
 

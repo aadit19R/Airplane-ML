@@ -10,7 +10,7 @@
 > **Supporting dataset:** OurAirports `airports.csv`  
 > **Optional extension:** Weather data — add only after the core warehouse, ML, and dashboard are complete
 
-## Current checkpoint — 13 September 2026
+## Current checkpoint — 27 September 2026
 
 - Cleaning, transformation, airport enrichment, feature engineering, and EDA
   are complete and documented.
@@ -22,6 +22,8 @@
   excluded from the target.
 - The frozen chronological split contains 4,592,366 training rows (Jan–Aug),
   1,159,898 validation rows (Sep–Oct), and 1,127,220 test rows (Nov–Dec).
+- Full-year EDA includes test-month outcomes; model choices must use only the
+  training and validation partitions.
 - `01_beginner_eda.ipynb` and `02_feature_engineering.ipynb` execute without
   errors, and all 12 current tests pass.
 - No model or learned preprocessing has been fitted. The next stages are the
@@ -32,6 +34,11 @@ Reproduce the completed stage with `python scripts/run_etl.py`, followed by
 `python scripts/execute_notebooks.py`. Detailed evidence is in
 `reports/cleaning_log.md`, `reports/feature_dictionary.md`, and
 `reports/transformation_report.md`.
+
+**File guide:** `data/raw/` holds the 12 original BTS CSVs and the original
+OurAirports CSV. The pipeline writes its 36 report CSVs to milestone folders
+under `reports/tables/`; see `reports/tables/README.md`. Flight-level outputs
+are monthly Parquet files under `data/interim/` and `data/processed/`.
 
 ---
 
@@ -87,9 +94,10 @@ airport location—and which factors matter most?**
 
    Compare Logistic Regression, Decision Tree, and Random Forest against an
    always-predict-non-severe baseline on the validation set. Select the model
-   there, then compare only the selected model and baseline on the untouched
-   November–December test set. Use recall, precision, F1, PR-AUC, ROC-AUC, and
-   balanced accuracy—not accuracy alone.
+   there, then compare only the selected model and baseline on the
+   November–December test set, held out from model fitting and tuning. Use
+   recall, precision, F1, PR-AUC, ROC-AUC, and balanced accuracy—not accuracy
+   alone.
 
 2. **Which pre-flight features contribute most to the model's predictions of severe flight delays?**
 
@@ -329,89 +337,27 @@ Weather can be added later only as a documented extension if:
 
 ---
 
-# 7. Repository Structure and Planned Additions
+# 7. Repository Structure and Data Flow
 
-Current files and planned additions follow. Planned items are labelled.
+| Location | Role |
+|---|---|
+| `data/raw/bts/2025/` | Input: 12 monthly BTS flight CSVs, January–December 2025. |
+| `data/raw/airports/airports.csv` | Input: original OurAirports reference CSV. |
+| `data/interim/airports_standardized/airports_standardized.csv` | Generated airport lookup used for the joins. |
+| `data/interim/flights_standardized/2025_MM.parquet` | Generated cleaned operational rows, one file per month. |
+| `data/processed/flights_wrangled/2025_MM.parquet` | Generated enriched operational rows, one file per month. |
+| `data/processed/flights_ml/2025_MM.parquet` | Generated eligible ML rows with split labels, one file per month. |
+| `reports/tables/02_ingestion/` | Source manifest. |
+| `reports/tables/03_cleaning/` | Quality audits and cleaning evidence. |
+| `reports/tables/04_transformation/` | Join checks and final row reconciliation. |
+| `reports/tables/06_eda/` | Descriptive summaries and plot sample. |
+| `reports/tables/07_ml_preparation/` | Data dictionary, missing features, and split summary. |
 
-```text
-airline-delay-project/
-│
-├── README.md
-├── PROJECT_PLAN.md
-├── requirements.txt
-├── .gitignore
-├── .env.example
-│
-├── config/
-│   ├── settings.yaml
-│   └── column_map.yaml
-│
-├── data/
-│   ├── raw/
-│   │   ├── bts/
-│   │   │   └── 2025/
-│   │   │
-│   │   └── airports/
-│   │       └── airports.csv
-│   │
-│   ├── interim/
-│   │   ├── flights_standardized/
-│   │   └── airports_standardized/
-│   │
-│   ├── processed/
-│   │   ├── flights_wrangled.parquet
-│   │   ├── flights_ml.parquet
-│   │   └── powerbi/
-│   │
-│   └── samples/
-│
-├── database/
-│   ├── airline_dw.sqlite
-│   └── schema.sql
-│
-├── notebooks/
-│   ├── 01_beginner_eda.ipynb
-│   ├── 02_feature_engineering.ipynb
-│   ├── 03_machine_learning.ipynb          # planned
-│   └── 04_model_interpretation.ipynb      # planned
-│
-├── src/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── clean.py
-│   ├── features.py
-│   ├── initial_analysis.py
-│   ├── etl.py
-│   ├── warehouse.py                       # planned
-│   ├── model.py                           # planned
-│   └── export_powerbi.py                  # planned
-│
-├── scripts/
-│   ├── run_initial_analysis.py
-│   ├── run_etl.py
-│   ├── execute_notebooks.py
-│   ├── build_database.py                  # planned
-│   ├── train_models.py                    # planned
-│   └── export_powerbi.py                  # planned
-│
-├── models/
-│   ├── trained/
-│   └── metrics/
-│
-├── reports/
-│   ├── figures/
-│   ├── tables/
-│   ├── cleaning_log.md
-│   ├── data_quality_report.md
-│   ├── model_results.md
-│   └── insights.md
-│
-└── tests/
-    ├── test_cleaning.py
-    ├── test_transformations.py
-    ├── test_validation.py
-    └── test_features.py
-```
+The folder numbers match the milestones in Section 37. There is no `05_`
+CSV folder because the warehouse has not been built. The complete CSV index
+is `reports/tables/README.md`. Planned code includes the warehouse, ML, and
+Power BI scripts and the `03_machine_learning.ipynb` and
+`04_model_interpretation.ipynb` notebooks.
 
 ---
 
@@ -1490,7 +1436,7 @@ Automate checks where possible.
 ## Row Reconciliation
 
 The completed monthly reconciliation is
-`reports/tables/final_row_reconciliation.csv`. It distinguishes rows retained in
+`reports/tables/04_transformation/final_row_reconciliation.csv`. It distinguishes rows retained in
 the operational data from rows excluded only because the ML target is undefined.
 
 ---
@@ -1777,7 +1723,7 @@ Codex must follow these rules.
    in Sections 20–27.
 7. Fit all learned preprocessing and resampling on training rows only.
 8. Select the model and probability threshold on validation data, then evaluate
-   once on the untouched test set.
+   once on the test set held out from model fitting and tuning.
 9. Do not fabricate results, optimize accuracy alone, add post-flight features,
    or change the target threshold after viewing model performance.
 

@@ -51,7 +51,7 @@ later validation can select a simpler subset without looking at test performance
 Each layer contains twelve `2025_MM.parquet` files: cleaned operational data in
 `data/interim/flights_standardized`, enriched data in
 `data/processed/flights_wrangled`, and eligible feature/label rows in
-`data/processed/flights_ml`. `reports/tables/data_dictionary.csv` records stored
+`data/processed/flights_ml`. `reports/tables/07_ml_preparation/data_dictionary.csv` records stored
 types and column roles. `source_file` + `source_row_number` links the layers.
 
 Read the future ML partitions with pandas, select X using `MODEL_FEATURES`, y

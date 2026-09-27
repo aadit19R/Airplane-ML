@@ -9,6 +9,7 @@ from src.clean import CODE_COLUMNS, NUMERIC_COLUMNS, clean_chunk, quality_issue_
 from src.config import PROJECT_ROOT, load_column_map, load_settings
 from src.features import MODEL_FEATURES, ML_METADATA, add_features, join_airports, select_ml_rows
 from src.initial_analysis import BUSINESS_KEY
+from src.report_paths import table_path
 
 
 def validate_month(flights, year, month):
@@ -57,7 +58,7 @@ def run():
     }
     for folder in folders.values():
         folder.mkdir(parents=True, exist_ok=True)
-    manifest = pd.read_csv(reports / "source_manifest.csv")
+    manifest = pd.read_csv(table_path(tables, "source_manifest"))
     expected = set(settings["project"]["expected_months"])
     assert set(manifest["expected_month"]) == expected and manifest["status"].eq("present").all()
     counts, conversions, monthly_distributions = [], [], []
@@ -65,9 +66,9 @@ def run():
     feature_missingness = []
     all_delays, airline_delays, route_delays, airport_delays = [], {}, {}, {}
     issues_total = Counter()
-    route_table = pd.read_csv(tables / "route_performance.csv")
+    route_table = pd.read_csv(table_path(tables, "route_performance"))
     busiest_routes = route_table.nlargest(10, "total_flights")["route"].tolist()
-    origin_table = pd.read_csv(tables / "origin_airport_performance.csv")
+    origin_table = pd.read_csv(table_path(tables, "origin_airport_performance"))
     busiest_airports = origin_table.nlargest(10, "total_flights")["origin"].tolist()
 
     for month in sorted(expected):
@@ -167,39 +168,39 @@ def run():
             dictionary.loc[dictionary["column"].isin(MODEL_FEATURES), "role"] = "candidate predictor"
             dictionary.loc[dictionary["column"].isin(ML_METADATA), "role"] = "metadata, excluded from X"
             dictionary.loc[dictionary["column"].eq("severe_delay"), "role"] = "target y"
-            dictionary.to_csv(tables / "data_dictionary.csv", index=False)
+            dictionary.to_csv(table_path(tables, "data_dictionary"), index=False)
         print(f"Saved and verified {year}-{month:02d}: {len(flights):,} operational, {len(ml):,} ML rows", flush=True)
         del flights, enriched, ml, eligible
 
     reconciliation = pd.DataFrame(counts)
-    reconciliation.to_csv(tables / "final_row_reconciliation.csv", index=False)
+    reconciliation.to_csv(table_path(tables, "final_row_reconciliation"), index=False)
     splits = reconciliation.groupby("dataset_split", as_index=False).agg(
         operational_rows=("raw_rows", "sum"), eligible_rows=("ml_rows", "sum"),
         severe_count=("severe_count", "sum"), min_date=("min_date", "min"), max_date=("max_date", "max"))
     splits["severe_delay_rate"] = splits["severe_count"] / splits["eligible_rows"]
-    splits.to_csv(tables / "ml_split_summary.csv", index=False)
+    splits.to_csv(table_path(tables, "ml_split_summary"), index=False)
     conversion_table = pd.DataFrame(conversions)
-    conversion_table.to_csv(tables / "conversion_audit.csv", index=False)
-    pd.DataFrame(feature_missingness).to_csv(tables / "ml_feature_missingness.csv", index=False)
-    pd.DataFrame(missingness).groupby("status", as_index=False).sum().to_csv(tables / "missingness_by_status.csv", index=False)
-    pd.DataFrame(monthly_distributions).to_csv(tables / "monthly_delay_distribution.csv", index=False)
+    conversion_table.to_csv(table_path(tables, "conversion_audit"), index=False)
+    pd.DataFrame(feature_missingness).to_csv(table_path(tables, "ml_feature_missingness"), index=False)
+    pd.DataFrame(missingness).groupby("status", as_index=False).sum().to_csv(table_path(tables, "missingness_by_status"), index=False)
+    pd.DataFrame(monthly_distributions).to_csv(table_path(tables, "monthly_delay_distribution"), index=False)
     for name, groups in [("airline", airline_delays), ("busy_route", route_delays), ("busy_origin", airport_delays)]:
         pd.DataFrame([distribution_row(label, np.concatenate(parts)) for label, parts in groups.items()]).to_csv(
-            tables / f"{name}_delay_distribution.csv", index=False)
+            table_path(tables, f"{name}_delay_distribution"), index=False)
     overall_delays = np.concatenate(all_delays)
-    pd.DataFrame([distribution_row("All eligible flights", overall_delays)]).to_csv(tables / "delay_distribution.csv", index=False)
-    pd.concat(samples, ignore_index=True).to_csv(tables / "eda_plot_sample.csv", index=False)
+    pd.DataFrame([distribution_row("All eligible flights", overall_delays)]).to_csv(table_path(tables, "delay_distribution"), index=False)
+    pd.concat(samples, ignore_index=True).to_csv(table_path(tables, "eda_plot_sample"), index=False)
     extreme_table = pd.concat(extremes, ignore_index=True).drop_duplicates(["source_file", "source_row_number"])
     extreme_table = pd.concat([extreme_table.nlargest(10, "arrival_delay_minutes"), extreme_table.nsmallest(10, "arrival_delay_minutes")])
     extreme_table["elapsed_delay_identity_error"] = (extreme_table["arrival_delay_minutes"] - extreme_table["departure_delay_minutes"]
         - extreme_table["actual_elapsed_minutes"] + extreme_table["scheduled_elapsed_minutes"])
-    extreme_table.to_csv(tables / "extreme_delay_review.csv", index=False)
+    extreme_table.to_csv(table_path(tables, "extreme_delay_review"), index=False)
     airport_month = pd.concat(airport_months, ignore_index=True)
     airport_month["cancellation_rate"] = airport_month["cancelled_flights"] / airport_month["total_flights"]
-    airport_month.to_csv(tables / "airport_month_cancellations.csv", index=False)
+    airport_month.to_csv(table_path(tables, "airport_month_cancellations"), index=False)
     route_month = pd.concat(route_months, ignore_index=True)
     route_month["severe_delay_rate"] = route_month["severe_count"] / route_month["eligible_flights"].replace(0, np.nan)
-    route_month.to_csv(tables / "route_month_performance.csv", index=False)
+    route_month.to_csv(table_path(tables, "route_month_performance"), index=False)
     assert airport_month["total_flights"].sum() == reconciliation["raw_rows"].sum()
     assert route_month["eligible_flights"].sum() == reconciliation["ml_rows"].sum()
     write_completion_reports(reconciliation, splits, conversion_table, issues_total, extreme_table)
@@ -243,8 +244,9 @@ The reviewed range is {extremes['arrival_delay_minutes'].min():.0f} to
 {extremes['arrival_delay_minutes'].max():.0f} minutes. No statistical trimming,
 winsorizing, or full-dataset imputation was performed.
 
-`conversion_audit.csv`, `missingness_by_status.csv`, `flagged_row_samples.csv`,
-`extreme_delay_review.csv`, and `final_row_reconciliation.csv` provide evidence.
+`tables/03_cleaning/conversion_audit.csv`, `tables/03_cleaning/missingness_by_status.csv`,
+`tables/03_cleaning/flagged_row_samples.csv`, `tables/03_cleaning/extreme_delay_review.csv`,
+and `tables/04_transformation/final_row_reconciliation.csv` provide evidence.
 Airport joins preserve every operational row and resolve every origin/destination.
 Current airport names/regions are descriptive snapshot labels, not a historical
 2025 dimension. Physical coordinates are candidate features with this limitation.
@@ -259,7 +261,7 @@ Current airport names/regions are descriptive snapshot labels, not a historical
 - Both airport merges validated as many-to-one; zero unmatched flight rows.
 - Exact full-year and group delay quantiles, contextual extreme review, monthly
   airport cancellations, and route-month aggregates generated from every month.
-- Predictor allowlist: `src/features.py`; column types/roles: `tables/data_dictionary.csv`.
+- Predictor allowlist: `src/features.py`; column types/roles: `tables/07_ml_preparation/data_dictionary.csv`.
 
 ## Chronological ML handoff
 
@@ -297,8 +299,8 @@ Warehouse construction, model comparison, and Power BI remain later milestones.
 - All saved ML values/types checked against the pre-save DataFrames.
 - Calendar fields agree with flight dates; both endpoint joins preserve rows.
 - Conversion/category audit: {parse_failures} parse failures and {corrections} actual field corrections.
-- Full reconciliation: `tables/final_row_reconciliation.csv`.
-- Remaining missing predictors: `tables/ml_feature_missingness.csv`; imputation belongs to training only.
+- Full reconciliation: `tables/04_transformation/final_row_reconciliation.csv`.
+- Remaining missing predictors: `tables/07_ml_preparation/ml_feature_missingness.csv`; imputation belongs to training only.
 """
     quality_path.write_text(quality, encoding="utf-8")
     eda_path = reports / "eda_progress_report.md"

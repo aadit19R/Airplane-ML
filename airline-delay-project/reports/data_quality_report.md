@@ -96,5 +96,5 @@ Final cleaning retained every operational record. The five invalid durations and
 - All saved ML values/types checked against the pre-save DataFrames.
 - Calendar fields agree with flight dates; both endpoint joins preserve rows.
 - Conversion/category audit: 0 parse failures and 0 actual field corrections.
-- Full reconciliation: `tables/final_row_reconciliation.csv`.
-- Remaining missing predictors: `tables/ml_feature_missingness.csv`; imputation belongs to training only.
+- Full reconciliation: `tables/04_transformation/final_row_reconciliation.csv`.
+- Remaining missing predictors: `tables/07_ml_preparation/ml_feature_missingness.csv`; imputation belongs to training only.

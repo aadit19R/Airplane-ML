@@ -17,4 +17,5 @@ models/trained/
 # Generated analysis outputs are reproducible from scripts.
 reports/figures/*.png
 reports/tables/*.csv
-
+reports/tables/**/*.csv
+!reports/tables/02_ingestion/source_manifest.csv

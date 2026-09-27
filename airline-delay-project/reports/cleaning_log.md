@@ -30,8 +30,9 @@ The reviewed range is -128 to
 4336 minutes. No statistical trimming,
 winsorizing, or full-dataset imputation was performed.
 
-`conversion_audit.csv`, `missingness_by_status.csv`, `flagged_row_samples.csv`,
-`extreme_delay_review.csv`, and `final_row_reconciliation.csv` provide evidence.
+`tables/03_cleaning/conversion_audit.csv`, `tables/03_cleaning/missingness_by_status.csv`,
+`tables/03_cleaning/flagged_row_samples.csv`, `tables/03_cleaning/extreme_delay_review.csv`,
+and `tables/04_transformation/final_row_reconciliation.csv` provide evidence.
 Airport joins preserve every operational row and resolve every origin/destination.
 Current airport names/regions are descriptive snapshot labels, not a historical
 2025 dimension. Physical coordinates are candidate features with this limitation.
